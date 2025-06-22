@@ -3,3 +3,6 @@
       csv_file_path: "/path/to/trajectory.csv"
       publish_on_initialize: true
       wait_seconds: 2.0
+      grad_min_speed: 0.0
+      grad_max_speed: 60.0
+      grad_mid_speed: 30.0
