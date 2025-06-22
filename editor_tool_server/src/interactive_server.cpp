@@ -90,10 +90,16 @@ namespace editor_tool_server
     this->declare_parameter<std::string>("csv_file_path", "default.csv");
     this->declare_parameter<bool>("publish_on_initialize", true);
     this->declare_parameter<float>("wait_seconds", 5.0);
+    this->declare_parameter<double>("grad_min_speed", 0.0);
+    this->declare_parameter<double>("grad_mid_speed", 30.0);
+    this->declare_parameter<double>("grad_max_speed", 60.0);
 
     this->get_parameter("csv_file_path", csv_file_path_);
     this->get_parameter("publish_on_initialize", publish_on_initialize_);
     this->get_parameter("wait_seconds", wait_seconds_);
+    this->get_parameter("grad_min_speed", min_speed_);
+    this->get_parameter("grad_mid_speed", mid_speed_);
+    this->get_parameter("grad_max_speed", max_speed_);
 
     // dynamic parameter callback
     param_callback_handle_ = this->add_on_set_parameters_callback(
@@ -121,6 +127,19 @@ namespace editor_tool_server
       } else if (param.get_name() == "publish_on_initialize" && param.get_type() == rclcpp::ParameterType::PARAMETER_BOOL) {
         publish_on_initialize_ = param.as_bool();
         RCLCPP_INFO(this->get_logger(), "Updated publish_on_initialize: %s", publish_on_initialize_ ? "true" : "false");
+      }
+      else if (param.get_name() == "wait_seconds" && param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+        wait_seconds_ = param.as_double();
+        RCLCPP_INFO(this->get_logger(), "Updated wait_seconds: %f", wait_seconds_);
+      } else if (param.get_name() == "grad_min_speed" && param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+        min_speed_ = param.as_double();
+        RCLCPP_INFO(this->get_logger(), "Updated grad_min_speed: %f", min_speed_);
+      } else if (param.get_name() == "grad_mid_speed" && param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+        mid_speed_ = param.as_double();
+        RCLCPP_INFO(this->get_logger(), "Updated grad_mid_speed: %f", mid_speed_);
+      } else if (param.get_name() == "grad_max_speed" && param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+        max_speed_ = param.as_double();
+        RCLCPP_INFO(this->get_logger(), "Updated grad_max_speed: %f", max_speed_);
       }
     }
 
@@ -359,9 +378,9 @@ namespace editor_tool_server
   visualization_msgs::msg::Marker & marker,
   double velocity)
   {
-    const double MIN_SPEED = 0.0;
-    const double MID_SPEED = 30.0; // 中間点（完全な黄色になる速度）
-    const double MAX_SPEED = 60.0; // 最大点（完全な赤になる速度）
+    const double MIN_SPEED = min_speed_; // 最小点（完全な緑になる速度）
+    const double MID_SPEED = mid_speed_; // 中間点（完全な黄色になる速度）
+    const double MAX_SPEED = max_speed_; // 最大点（完全な赤になる速度）
     // 速度を MIN_SPEED から MAX_SPEED の範囲にクランプする
     double clamped_speed = std::clamp(velocity, MIN_SPEED, MAX_SPEED);
 
