@@ -72,6 +72,7 @@ namespace editor_tool_server
     void publishTrajectorySrv(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
       std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
+    void AutoColorizeTraj(visualization_msgs::msg::Marker & marker, double velocity);
     void publishTrajectory();
     
     void redrawMarkers();
@@ -98,6 +99,8 @@ namespace editor_tool_server
 
     /// trajectory_markers_（基礎マーカー群）を元に改めて MarkerArray を生成して publish
     void publishMarkers();
+
+    void refreshTrajectoryColor();
 
     // --- CSV ↔ MarkerArray 変換ヘルパー ---
 
@@ -132,6 +135,9 @@ namespace editor_tool_server
     std::string csv_file_path_;
     bool publish_on_initialize_;
     float wait_seconds_;
+    double min_speed_;
+    double max_speed_;
+    double mid_speed_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
 
     rcl_interfaces::msg::SetParametersResult onParameterChange(const std::vector<rclcpp::Parameter> & parameters);
