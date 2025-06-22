@@ -260,6 +260,13 @@ namespace editor_tool_server
             p_sel_idx1_ = it->second;
             RCLCPP_DEBUG(get_logger(), "ParallelMove: first index selected: %d", p_sel_idx1_);
           }
+          if (p_sel_idx1_ >= 0 && p_sel_idx1_ < trajectory_markers_.size()) {
+              trajectory_markers_[p_sel_idx1_].color.r = 0.91f;
+              trajectory_markers_[p_sel_idx1_].color.g = 0.984f;
+              trajectory_markers_[p_sel_idx1_].color.b = 0.992f;
+              trajectory_markers_[p_sel_idx1_].color.a = 1.0f;
+              redrawMarkers();       
+          }
         return;
       }
       if (p_sel_idx2_ < 0) {
@@ -268,7 +275,14 @@ namespace editor_tool_server
             p_sel_idx2_ = it->second;
             RCLCPP_DEBUG(get_logger(), "ParallelMove: second index selected: %d", p_sel_idx2_);
 
-            // 2） 選択範囲確定 ⇒ 移動マーカーを生成
+            std::vector<int> indices = getRangeIndices(p_sel_idx1_, p_sel_idx2_);
+            for (int idx : indices) {
+              trajectory_markers_[idx].color.r = 0.91f;
+              trajectory_markers_[idx].color.g = 0.984f;
+              trajectory_markers_[idx].color.b = 0.992f;
+              trajectory_markers_[idx].color.a = 1.0f;
+            }
+            redrawMarkers();
             createMoveHelperMarker();
           }
         return;
@@ -320,6 +334,13 @@ namespace editor_tool_server
         if (sel_idx1_ < 0) {
           sel_idx1_ = clicked_idx;
           RCLCPP_DEBUG(get_logger(), "Selected first index: %d", sel_idx1_);
+          if (sel_idx1_ >= 0 && sel_idx1_ < trajectory_markers_.size()) {
+              trajectory_markers_[sel_idx1_].color.r = 0.91f;
+              trajectory_markers_[sel_idx1_].color.g = 0.984f;
+              trajectory_markers_[sel_idx1_].color.b = 0.992f;
+              trajectory_markers_[sel_idx1_].color.a = 1.0f;
+              redrawMarkers();
+          }
         }
         else if (sel_idx2_ < 0 && clicked_idx != sel_idx1_) {
           sel_idx2_ = clicked_idx;
@@ -334,9 +355,6 @@ namespace editor_tool_server
           int backward_len = (i1 >= i2) ? (i1 - i2) : (N - (i2 - i1));
           bool use_forward = (forward_len <= backward_len);
 
-          const double MIN_SPEED = 0.0;
-          const double MID_SPEED = 30.0; // 中間点（完全な黄色になる速度）
-          const double MAX_SPEED = 60.0; // 最大点（完全な赤になる速度）
 
           // ループの進行方向を決定 (順方向なら+1, 逆方向なら-1)
           const int direction = use_forward ? 1 : -1;
@@ -358,7 +376,7 @@ namespace editor_tool_server
             idx = (idx + direction + N) % N;
           }
           // 結果を publish して、選択モードを終了
-          publishMarkers();
+          redrawMarkers();
           selection_mode_ = false;
           sel_idx1_ = sel_idx2_ = -1;
           RCLCPP_INFO(get_logger(), "Selection completed; exiting selection mode.");
@@ -802,6 +820,7 @@ namespace editor_tool_server
     RCLCPP_INFO(get_logger(), "ParallelMove: confirmed and mode exited.");
     response->success = true;
     response->message = "Parallel move confirmed";
+    refreshTrajectoryColor();
   }
 
   void EditorToolServer::createMoveHelperMarker()
@@ -941,6 +960,15 @@ namespace editor_tool_server
     server_->applyChanges();
     publishMarkers();
     // name_to_index_ は makeMoveTrajectoryMarker で埋まる
+  }
+
+  void EditorToolServer::refreshTrajectoryColor()
+  {
+    for (auto & marker : trajectory_markers_) {
+      double speed = std::stod(marker.text);
+      AutoColorizeTraj(marker, speed);
+    }
+    redrawMarkers();
   }
 
 } // namespace editor_tool_server

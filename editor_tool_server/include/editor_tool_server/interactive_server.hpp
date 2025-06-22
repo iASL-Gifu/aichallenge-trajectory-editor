@@ -100,6 +100,8 @@ namespace editor_tool_server
     /// trajectory_markers_（基礎マーカー群）を元に改めて MarkerArray を生成して publish
     void publishMarkers();
 
+    void refreshTrajectoryColor();
+
     // --- CSV ↔ MarkerArray 変換ヘルパー ---
 
     /// 1行の CSV テキストを Marker に変換
