@@ -1,19 +1,38 @@
 # aichallenge-trajectory-editor
-Provides a trajectory editor and a tool for generating trajectory from raceline
-
-🍀We have implemented it in Rviz. The usage is described in this [link](./rviz_plugins.md).
-
-## how to run
+This project is a plugin for editing vehicle tracks on Rviz.
+## How to build
 ```bash
-export PATH="$PATH:$HOME/aichallenge2024-trajectory-editor/cmd_line/"
+mkdir ~/ws/src -p
+cd ~/ws/src
+git clone git@github.com:iASL-Gifu/aichallenge2024-trajectory-editor.git
+
+cd ~/ws
+colcon build --symlink-install
 ```
 
-run editor
+## How to run
 ```bash
-csv_editor
+# terminal 1
+source install/setup.bash
+rviz2 -d path/to/tools.rviz
+
+# terminal 2
+source install/setup.bash
+ros2 run editor_tool_sever interactive_server
 ```
 
-run enerating trajectory from raceline
-```bash
-raceline_to_traj
-```
+## How to use
+![editor](./rviz2_editor_tool.png)
+1. load csv file button and select csv file.
+2. edit trajectory
+3. save & publish
+
+### select range:
+Select two points and apply the number (speed) on the button to all trajectory between them.
+### start parallel move:
+Selecting two points will generate blue spherical markers. By moving these markers, you can parallel trajectories in the specified section.
+### End parallel move:
+Finish parallel move & position save
+
+### other version
+[trajectory editor(python)](https://github.com/iASL-Gifu/aichallenge-trajectory-editor/tree/trajectory-editor-python)
