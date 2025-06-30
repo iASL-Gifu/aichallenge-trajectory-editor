@@ -28,9 +28,11 @@ git clone https://github.com/iASL-Gifu/aichallenge-trajectory-editor.git
 ![image](./asset/panel.png)
 
 次に`rviz_editor_plugins`にある２つを起動します。
+
 ![image2](./asset/newpanel.png)
 
 すると新たにdisplayが追加されているはずです。
+
 ![rviz2](./asset/rviz2.png)
 
 最後に、`race_trajectory`と`editor_tool_server`のtopicを描画できるように選択しておいてください。ここからは各機能について説明します。
