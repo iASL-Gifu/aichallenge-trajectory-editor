@@ -46,4 +46,3 @@ select range: 上部のtext editorに埋め込まれている速度を指定し�
 start parallel move & end parallel move: 選択した２点間にあるすべての点を平行移動できるようにします。終了時にendしてください。
 
 post trajectory: 実際の車両起動をeditorのものに反映します。
-
