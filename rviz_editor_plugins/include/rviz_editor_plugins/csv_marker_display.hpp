@@ -8,6 +8,7 @@
 # include "visualization_msgs/msg/marker_array.hpp"
 # include "editor_tool_srvs/srv/load_csv.hpp"
 # include "editor_tool_srvs/srv/select_range.hpp"
+# include "editor_tool_srvs/srv/save_csv.hpp"
 # endif
 
 namespace rviz_editor_plugins
@@ -31,6 +32,7 @@ protected:
   QPushButton * load_button_;
   QPushButton * save_button_;
   rclcpp::Client<editor_tool_srvs::srv::LoadCsv>::SharedPtr load_client_;
+  rclcpp::Client<editor_tool_srvs::srv::SaveCsv>::SharedPtr save_client_;
   void loadCsv();
   void saveCsv();
 };
