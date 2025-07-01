@@ -31,6 +31,11 @@ namespace editor_tool_server
       std::bind(&EditorToolServer::LoadCsv, this,
                 std::placeholders::_1, std::placeholders::_2));
 
+    save_csv_service_ = this->create_service<editor_tool_srvs::srv::SaveCsv>(
+      "save_csv",
+      std::bind(&EditorToolServer::SaveCsvSrv, this,
+                std::placeholders::_1, std::placeholders::_2));
+
     // --- 選択モード開始サービスの登録 (SelectRange.srv) ---
     select_range_service_ = this->create_service<editor_tool_srvs::srv::SelectRange>(
       "select_range",
@@ -221,6 +226,23 @@ namespace editor_tool_server
       RCLCPP_INFO(get_logger(), "CSV loaded and markers displayed successfully");
     }
   
+  }
+
+  void EditorToolServer::SaveCsvSrv(
+    const std::shared_ptr<editor_tool_srvs::srv::SaveCsv::Request> request,
+    std::shared_ptr<editor_tool_srvs::srv::SaveCsv::Response> response)
+  {
+    const std::string & file_name = request->filename;
+    if (file_name.empty()) {
+      RCLCPP_ERROR(get_logger(), "SaveCsv: filename is empty");
+      return;
+    }
+
+    if (saveCsv(file_name)) {
+      RCLCPP_INFO(get_logger(), "CSV saved successfully to %s", file_name.c_str());
+    } else {
+      RCLCPP_ERROR(get_logger(), "Failed to save CSV to %s", file_name.c_str());
+    }
   }
 
   void EditorToolServer::StartSelection(
@@ -723,20 +745,42 @@ namespace editor_tool_server
   }
 
   bool EditorToolServer::saveCsv(
-    const std::string & file_name,
-    const visualization_msgs::msg::MarkerArray & marker_array)
+    const std::string & file_name)
   {
+    // std::ofstream ofs(file_name);
+    // if (!ofs.is_open()) {
+    //   RCLCPP_ERROR(get_logger(), "Failed to open file: %s", file_name.c_str());
+    //   return false;
+    // }
+    // // ヘッダ
+    // ofs << "x,y,z,qx,qy,qz,qw,speed\n";
+
+    // for (const auto & marker : marker_array.markers) {
+    //   double speed_kmh = std::stod(marker.text);
+    //   double speed_ms  = speed_kmh / 3.6;
+    //   ofs << marker.pose.position.x << ","
+    //       << marker.pose.position.y << ","
+    //       << marker.pose.position.z << ","
+    //       << marker.pose.orientation.x << ","
+    //       << marker.pose.orientation.y << ","
+    //       << marker.pose.orientation.z << ","
+    //       << marker.pose.orientation.w << ","
+    //       << speed_ms << "\n";
+    // }
+    // ofs.close();
+    // RCLCPP_INFO(get_logger(), "CSV saved to %s", file_name.c_str());
+    // return true;
+
     std::ofstream ofs(file_name);
     if (!ofs.is_open()) {
       RCLCPP_ERROR(get_logger(), "Failed to open file: %s", file_name.c_str());
       return false;
     }
-    // ヘッダ
+    // ヘッダ行
     ofs << "x,y,z,qx,qy,qz,qw,speed\n";
-
-    for (const auto & marker : marker_array.markers) {
+    for (const auto & marker : trajectory_markers_) {
       double speed_kmh = std::stod(marker.text);
-      double speed_ms  = speed_kmh / 3.6;
+      double speed_ms  = speed_kmh / 3.6;  // km/h → m/s
       ofs << marker.pose.position.x << ","
           << marker.pose.position.y << ","
           << marker.pose.position.z << ","

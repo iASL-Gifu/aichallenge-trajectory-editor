@@ -18,6 +18,7 @@
 
 #include "editor_tool_srvs/srv/load_csv.hpp"
 #include "editor_tool_srvs/srv/select_range.hpp"
+#include "editor_tool_srvs/srv/save_csv.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
 #include "autoware_auto_planning_msgs/msg/trajectory.hpp"
@@ -47,6 +48,10 @@ namespace editor_tool_server
       std::shared_ptr<editor_tool_srvs::srv::LoadCsv::Response>       response);
     
     void LoadCsvFile(const std::string & file_name);
+
+    void SaveCsvSrv(
+      const std::shared_ptr<editor_tool_srvs::srv::SaveCsv::Request> request,
+      std::shared_ptr<editor_tool_srvs::srv::SaveCsv::Response>      response);
 
     /// 選択モードを開始し、２点を選択した後、その間にあるマーカーを青くして速度を反映する
     void StartSelection(
@@ -112,8 +117,7 @@ namespace editor_tool_server
 
     /// MarkerArray のデータを CSV ファイルに出力
     bool saveCsv(
-      const std::string & file_name,
-      const visualization_msgs::msg::MarkerArray & marker_array);
+      const std::string & file_name);
 
     std::vector<int> getRangeIndices(int idx1, int idx2);
 
@@ -125,6 +129,7 @@ namespace editor_tool_server
     /// Service
     rclcpp::Service<editor_tool_srvs::srv::LoadCsv>::SharedPtr load_csv_service_;
     rclcpp::Service<editor_tool_srvs::srv::SelectRange>::SharedPtr select_range_service_;
+    rclcpp::Service<editor_tool_srvs::srv::SaveCsv>::SharedPtr save_csv_service_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_parallel_move_service_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr confirm_parallel_move_service_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr undo_service_;

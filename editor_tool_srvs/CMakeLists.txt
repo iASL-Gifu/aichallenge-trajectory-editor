@@ -15,6 +15,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/LoadCsv.srv"
   "srv/SelectRange.srv"
+  "srv/SaveCsv.srv"
 )
 
 ament_package()

@@ -7,6 +7,7 @@
 
 #include "editor_tool_srvs/srv/load_csv.hpp"
 #include "editor_tool_srvs/srv/select_range.hpp"
+#include "editor_tool_srvs/srv/save_csv.hpp"
 
 // #include <QsizePolicy>
 
@@ -21,6 +22,7 @@ namespace rviz_editor_plugins
     load_button_ = new QPushButton("Load CSV");
     save_button_ = new QPushButton("Save CSV");
     load_client_ = node_->create_client<editor_tool_srvs::srv::LoadCsv>("load_csv");
+    save_client_ = node_->create_client<editor_tool_srvs::srv::SaveCsv>("save_csv");
     
 
     QVBoxLayout * layout = new QVBoxLayout;
@@ -77,6 +79,17 @@ namespace rviz_editor_plugins
       // Logic to save CSV file
       RCLCPP_INFO(node_->get_logger(), "Saving CSV file: %s", fileName.toStdString().c_str());
       // Add your CSV saving logic here
+    }
+
+    auto request = std::make_shared<editor_tool_srvs::srv::SaveCsv::Request>();
+    request->filename = fileName.toStdString();
+    auto result = save_client_->async_send_request(request);
+    if (!result.valid()) {
+      RCLCPP_ERROR(node_->get_logger(), "Failed to send request to save CSV");
+      label_->setText(QString("Failed to save CSV"));
+    } else {
+      label_->setText(QString("CSV saved successfully"));
+      RCLCPP_INFO(node_->get_logger(), "CSV saved successfully to %s", fileName.toStdString().c_str());
     }
   }
 }
