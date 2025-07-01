@@ -7,6 +7,7 @@
 #include <QtWidgets>
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "editor_tool_srvs/srv/select_range.hpp"
+#include "editor_tool_srvs/srv/save_csv.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #endif
 
@@ -42,6 +43,10 @@ protected:
   QPushButton * undo_button_;
   QPushButton * redo_button_;
   QPushButton * post_button_;
+
+  bool use_simple_trajectory_generator;
+  rclcpp::Client<editor_tool_srvs::srv::SaveCsv>::SharedPtr save_csv_client_;
+  std::shared_ptr<rclcpp::SyncParametersClient> param_client_;
 
   void startSelection();
   void stratParallelMove();

@@ -3,6 +3,8 @@
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/config.hpp>
 #include "editor_tool_srvs/srv/select_range.hpp"
+#include "editor_tool_srvs/srv/save_csv.hpp"
+#include <rcpputils/filesystem_helper.hpp>
 #include "std_srvs/srv/trigger.hpp"
 
 namespace rviz_editor_plugins
@@ -26,7 +28,10 @@ namespace rviz_editor_plugins
     confirm_parallel_client_ = node_->create_client<std_srvs::srv::Trigger>("confirm_parallel_move");
     undo_client_ = node_->create_client<std_srvs::srv::Trigger>("undo");
     redo_client_ = node_->create_client<std_srvs::srv::Trigger>("redo");
+    save_csv_client_ = node_->create_client<editor_tool_srvs::srv::SaveCsv>("save_csv");
     publish_trajectory_client_ = node_->create_client<std_srvs::srv::Trigger>("publish_trajectory");
+
+    param_client_ = std::make_shared<rclcpp::SyncParametersClient>(node_, "/planning/scenario_planning/simple_trajectory_generator");
 
     QVBoxLayout * layout = new QVBoxLayout;
     QGridLayout * grid_layout_parallel = new QGridLayout;
@@ -51,6 +56,13 @@ namespace rviz_editor_plugins
     connect(redo_button_, &QPushButton::clicked, this, &EditorTool::redo);
     connect(post_button_, &QPushButton::clicked, this, &EditorTool::postTrajectory);
 
+    use_simple_trajectory_generator = false; // This should be set based on your configuration
+    for (const auto & name : node_->get_node_names()) {
+      if (name == "/planning/scenario_planning/simple_trajectory_generator") {
+        use_simple_trajectory_generator = true;
+        break;
+      }
+    }
   }
 
   void EditorTool::onInitialize()
@@ -172,6 +184,31 @@ namespace rviz_editor_plugins
 
   void EditorTool::postTrajectory()
   {
+    if (use_simple_trajectory_generator) {
+      // ".post"フォルダがないなら作成する
+      std::string save_path_ = "/aichallenge/post";
+      if (!rcpputils::fs::exists(save_path_)) {
+        RCLCPP_INFO(node_->get_logger(), "Creating directory: %s", save_path_.c_str());
+        rcpputils::fs::create_directories(save_path_);
+      }
+      // post.csvとして保存する
+      save_path_ += "/post.csv";
+      auto save_request = std::make_shared<editor_tool_srvs::srv::SaveCsv::Request>();
+      save_request->filename = save_path_;
+      auto save_future = save_csv_client_->async_send_request(save_request);
+
+      if (rclcpp::spin_until_future_complete(node_, save_future) == rclcpp::FutureReturnCode::SUCCESS) {
+        RCLCPP_INFO(node_->get_logger(), "CSV saved to %s", save_path_.c_str());
+      } else {
+        RCLCPP_ERROR(node_->get_logger(), "Failed to save CSV");
+        return;
+      }
+
+      auto request = param_client_->set_parameters({
+        rclcpp::Parameter("csv_path" , save_path_)
+      }); 
+      return;
+    }
     // Post trajectory logic
     auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
     if (publish_trajectory_client_->wait_for_service(std::chrono::seconds(1))) {
