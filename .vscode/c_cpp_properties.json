@@ -2,30 +2,20 @@
   "configurations": [
     {
       "browse": {
-        "databaseFilename": "${default}",
+        "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db",
         "limitSymbolsToIncludedHeaders": false
       },
       "includePath": [
         "/opt/ros/humble/include/**",
         "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge-trajectory-editor/editor_tool_server/include/**",
         "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge-trajectory-editor/rviz_editor_plugins/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge_submit/gyro_odometer/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge_submit/imu_corrector/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge_submit/path_to_trajectory/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge_submit/simple_pure_pursuit/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/aichallenge_system/autoware_overlay_rviz_plugin/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/ros2-performance/composition_benchmark/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/ros2-performance/performance_metrics/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/ros2-performance/performance_test/include/**",
-        "/home/tomokikuno/aichallenge-2025/aichallenge/workspace/src/ros2-performance/performance_test_factory/include/**",
         "/usr/include/**"
       ],
-      "name": "ROS",
+      "name": "ros2",
       "intelliSenseMode": "gcc-x64",
       "compilerPath": "/usr/bin/gcc",
       "cStandard": "gnu11",
-      "cppStandard": "c++14"
+      "cppStandard": "c++17"
     }
   ],
   "version": 4
