@@ -1,5 +1,7 @@
 # aichallenge-trajectory-editor
 This project is a plugin for editing vehicle tracks on Rviz.
+  ![rviz](./asset/rviz.png)
+
 ## 主な機能
 `aichallenge-trajectory-editor`は、ROS 2 および Autoware 環境向けに開発された、車両の軌跡を編集するためのRvizプラグインです。このリポジトリは、以下の主要な機能を提供しています。
 
@@ -65,6 +67,7 @@ Docker環境に入り、以下のコマンドでAutowareをビルドします。
 手動で設定する場合は、Autoware起動後、Rviz画面を開き、画面上部のメニューから`Panel` -\> `Add New Panel`を選択します。
 
 表示されるウィンドウで、`rviz_editor_plugins`カテゴリにある`CsvMarkerDisplay`と`EditorTool`をそれぞれ追加します。
+![newpanel](./asset/newpanel.png)
 
 ### 5\. トピックの描画設定
 
@@ -72,6 +75,9 @@ Rviz画面の左下にある`Displays`パネルで、以下のトピックを追
 
   * `/race_trajectory`
   * `/editor_tool_server`
+
+![topics](./asset/topics.png)
+
 
 これにより、編集対象の軌跡と、それを操作するためのインタラクティブマーカーが表示されます。必要に応じて、現在のRvizの設定を保存しておくことを推奨します (`File` -\> `Save`)。
 
