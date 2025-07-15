@@ -15,15 +15,26 @@ This project is a plugin for editing vehicle tracks on Rviz.
     * 軌跡の初期読み込みやパブリッシュに関するパラメータ（例：`csv_file_path`、`publish_on_initialize`、`wait_seconds`、`grad_min_speed`、`grad_mid_speed`、`grad_max_speed`）を設定ファイルで定義できます。
 
 このツールは、Autowareで自動運転シミュレーションを行う際に、車両が走行する軌跡を手動で調整し、その影響を即座に確認できるインタラクティブな環境を提供することを目的としています。
-## AIChallenge Trajectory Editorの使い方
-aichallenge trajectory editorの使い方
-まず、このレポジトリを任意のwsにcloneしてください。
-今回は,`~/aichallenge/workspace/src`配下にcloneすることをおすすめします。
+はい、承知いたしました。提供された情報を基に、`AIChallenge Trajectory Editor`のセットアップと使用方法について、より整理して記述します。
+
+-----
+
+## セットアップと使用方法
+
+`AIChallenge Trajectory Editor`は、Autoware環境で車両の軌跡をRviz上で視覚的に編集するためのツールです。以下の手順でセットアップと使用が可能です。
+
+### 1\. リポジトリのクローン
+
+まず、任意のワークスペース（例: `~/aichallenge/workspace/src`）に本リポジトリをクローンします。
+
 ```bash
+cd ~/aichallenge-2025/aichallenge/workspace/src
 git clone https://github.com/iASL-Gifu/aichallenge-trajectory-editor.git
 ```
 
-次に`~/aichallenge-2025/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml`に以下を追加します。
+### 2\. Autoware起動設定の追加
+
+Autowareの起動設定ファイル`~/aichallenge-2025/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml`に、以下の`editor_tool_server`ノードを追加します。
 
 ```xml
 <node pkg="editor_tool_server" exec="interactive_server" output="screen" name="editor_tool_server">
@@ -35,38 +46,45 @@ git clone https://github.com/iASL-Gifu/aichallenge-trajectory-editor.git
     <param name="grad_max_speed" value="40.0"/>
 </node>
 ```
-次にdockerに入り、次のコマンドを実行します。
+
+この設定では、`editor_tool_server`ノードが起動時にデフォルトのCSVファイルを読み込み、初期軌跡をパブリッシュするようになっています。
+
+### 3\. Autowareのビルドと起動
+
+Docker環境に入り、以下のコマンドでAutowareをビルドします。
+
 ```bash
 ./build_autoware.bash
 ```
 
-次にAutowareを起動し、Rviz画面上部の`Pannel->Add new panel`を選択します。
+ビルドが完了したら、Autowareを起動します。
 
-![image](./asset/panel.png)
+### 4\. Rvizプラグインの追加
+本リポジトリには、Rvizの設定ファイル autoware.rviz が含まれています。このファイルをRvizのFile -> Open Configから読み込むことで、必要なプラグインやトピック表示設定を簡単に適用できます。
 
-次に`rviz_editor_plugins`にあるCsvMarkerDisplay・EditorToolを追加します。
+手動で設定する場合は、Autoware起動後、Rviz画面を開き、画面上部のメニューから`Panel` -\> `Add New Panel`を選択します。
 
-![image2](./asset/newpanel.png)
+表示されるウィンドウで、`rviz_editor_plugins`カテゴリにある`CsvMarkerDisplay`と`EditorTool`をそれぞれ追加します。
 
-新たにdisplayが追加されます。
+### 5\. トピックの描画設定
 
-![rviz2](./asset/rviz2.png)
+Rviz画面の左下にある`Displays`パネルで、以下のトピックを追加して描画します。
 
-最後に、`/race_trajectory`と`/editor_tool_server`のtopicを描画して下さい。
-![topics](./asset/topics.png)
+  * `/race_trajectory`
+  * `/editor_tool_server`
 
-以下のように表示されます。必要に応じてRviz画面をFile→Saveして下さい。
-![rviz2](./asset/rviz.png)
+これにより、編集対象の軌跡と、それを操作するためのインタラクティブマーカーが表示されます。必要に応じて、現在のRvizの設定を保存しておくことを推奨します (`File` -\> `Save`)。
 
+### 6\. エディタの使用方法
 
+Rvizに追加された`EditorTool`パネルと`CsvMarkerDisplay`パネルを使用して、軌跡を編集します。
 
-## Rvizパネル内のボタン機能
-
-* **Load CSV**: CSVファイルを指定して軌跡データをロードします。
-* **Save CSV**: 編集中の軌跡データをCSVファイルとして保存します。
-* **Select Range**: 上部のテキストエディタに入力された速度を、Rviz上で選択した2点間の軌跡に反映します。
-* **Start Parallel Move**: 軌跡上の2点を選択すると、その区間内のすべてのマーカー（青い球体のマーカーとして表示される）を平行移動できるようになります。
-* **End Parallel Move**: 平行移動モードを終了し、変更された軌跡の位置を保存します。
-* **Post Trajectory**: 現在エディタに表示されている車両経路をAutowareに反映させます。
-
-RViz上で編集した経路をAutowareに反映させるためには、「Post Trajectory」ボタンをクリックする必要があります。これを実行しない限り、RViz上での変更はAutowareのプランニングに適用されません。
+  * **Load CSV (CsvMarkerDisplayパネル)**: 新しいCSVファイルをロードして、表示される軌跡を切り替えます。
+  * **Save CSV (CsvMarkerDisplayパネル)**: 編集した軌跡データをCSVファイルとして保存します。
+  * **Velocity入力 (EditorToolパネル)**: 速度を入力するテキストボックスです。ここに数値を入力し、「Select Range」ボタンと組み合わせて使用します。
+  * **Select Range (EditorToolパネル)**: Velocity入力欄に入力された速度を、Rviz上でクリックして選択した2点間の軌跡に適用します。
+  * **Start Parallel Move (EditorToolパネル)**: 軌跡上の2点を選択すると、青い球体のマーカーが生成され、その区間内のすべての軌跡ポイントを平行移動できるようになります。
+  * **End Parallel Move (EditorToolパネル)**: 平行移動モードを終了し、軌跡の位置の変更を確定・保存します。
+  * **Undo (EditorToolパネル)**: 直前の編集操作を元に戻します。
+  * **Redo (EditorToolパネル)**: Undoで元に戻した操作をやり直します。
+  * **Post Trajectory (EditorToolパネル)**: **RViz上で編集した経路をAutowareに反映させるためには、この「Post Trajectory」ボタンをクリックする必要があります。これを実行しない限り、RViz上での変更はAutowareのプランニングに適用されません。**
