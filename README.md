@@ -67,6 +67,7 @@ Docker環境に入り、以下のコマンドでAutowareをビルドします。
 手動で設定する場合は、Autoware起動後、Rviz画面を開き、画面上部のメニューから`Panel` -\> `Add New Panel`を選択します。
 
 表示されるウィンドウで、`rviz_editor_plugins`カテゴリにある`CsvMarkerDisplay`と`EditorTool`をそれぞれ追加します。
+
 ![newpanel](./asset/newpanel.png)
 
 ### 5\. トピックの描画設定
