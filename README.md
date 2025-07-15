@@ -60,15 +60,13 @@ git clone https://github.com/iASL-Gifu/aichallenge-trajectory-editor.git
 
 
 
-# 機能説明
+## Rvizパネル内のボタン機能
 
-load csv: csvを指定することでtrajectoryをloadできます。
+* **Load CSV**: CSVファイルを指定して軌跡データをロードします。
+* **Save CSV**: 編集中の軌跡データをCSVファイルとして保存します。
+* **Select Range**: 上部のテキストエディタに入力された速度を、Rviz上で選択した2点間の軌跡に反映します。
+* **Start Parallel Move**: 軌跡上の2点を選択すると、その区間内のすべてのマーカー（青い球体のマーカーとして表示される）を平行移動できるようになります。
+* **End Parallel Move**: 平行移動モードを終了し、変更された軌跡の位置を保存します。
+* **Post Trajectory**: 現在エディタに表示されている車両経路をAutowareに反映させます。
 
-save csv: trajectoryをsaveする機能です。　
-
-select range: 上部のtext editorに埋め込まれている速度を指定した区間に反映します。　
-
-start parallel move & end parallel move: 選択した２点間にあるすべての点を平行移動できるようにします。終了時にendしてください。
-
-post trajectory: Editorの車両経路をAutowareに反映させます。
-
+RViz上で編集した経路をAutowareに反映させるためには、「Post Trajectory」ボタンをクリックする必要があります。これを実行しない限り、RViz上での変更はAutowareのプランニングに適用されません。
