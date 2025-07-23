@@ -5,8 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backend_bases import MouseButton
+from matplotlib.collections import LineCollection
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog
 import subprocess
 
 
@@ -138,8 +139,8 @@ class PlotTool:
         self.fig, self.ax = plt.subplots()
         self.fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         self.ax.set_aspect('equal', adjustable='datalim')
-        self.fig.patch.set_facecolor('white')  # 図の背景を白色に設定
-        self.ax.set_facecolor('white')         # 軸の背景を白色に設定
+        self.fig.patch.set_facecolor('white')
+        self.ax.set_facecolor('white')
 
         # Matplotlibの図をTkinterに埋め込む
         self.canvas = FigureCanvasTkAgg(self.fig, master=master)
@@ -149,49 +150,46 @@ class PlotTool:
         self.cid_press = self.canvas.mpl_connect('button_press_event', self.on_click)
         self.cid_release = self.canvas.mpl_connect('button_release_event', self.on_release)
         self.cid_motion = self.canvas.mpl_connect('motion_notify_event', self.on_motion)
-        self.cid_scroll = self.canvas.mpl_connect('scroll_event', self.on_scroll)  # スクロールイベント
+        self.cid_scroll = self.canvas.mpl_connect('scroll_event', self.on_scroll)
 
+        # --- データ & 描画オブジェクト ---
         self.x, self.y, self.labels = [], [], []
         self.z, self.x_q, self.y_q, self.z_q, self.w_q = [], [], [], [], []
         self.inner_map_x, self.inner_map_y = [], []
         self.outer_map_x, self.outer_map_y = [], []
-        self.texts = []  # ラベル表示用のテキスト
-        self.header = []  # CSVファイルのヘッダー
-        self.last_path = None  # 最後に選択したファイルのパス
+        self.header = []
+        
+        # 描画オブジェクトを保持する変数
+        self.points_collection = None
+        self.line_collection = None
+        self.label_texts = []
+        self.map_plots = []
+
+        self.last_path = None
         self.selected_point = None
         self.selected_line = None
-        self.active_label = None  # アクティブなラベルの保持
-        self.edit_labels_start = None  # 一括編集の開始点の保持
-
-        # ズーム倍率の初期化
+        self.active_label = None
+        self.edit_labels_start = None
         self.zoom_scale = 1.1
-        self.pan_active = False   # パン（画面移動）状態のフラグ
-        self.pan_start = None     # パンの開始位置を記録する
-
+        self.pan_active = False
+        self.pan_start = None
         self.selected_range_start = None
         self.selected_range_end = None
-        self.selected_range_points = []  # 選択された範囲の点リスト
-        self.dragging_range = False  # 範囲内ドラッグ状態の管理
+        self.selected_range_points = []
+        self.dragging_range = False
+        self.drag_start_pos = None
 
-        self.selected_range_start = None
-        self.selected_range_end = None
-
-        # undo redo用のlist
         self.undo_list = []
         self.redo_list = []
 
-        # このpythonスクリプトのディレクトリを取得
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # ディレクトリの一つ上のディレクトリを取得
         self.parent_dir = os.path.dirname(self.script_dir)
-
         self.save_undo_trajectory()
 
-        # csvの初回ロード
         self.default_map_path = self.parent_dir + '/csv/lane.csv'
         self.load_map(self.default_map_path)
 
+    # (チェックボックスの排他制御など、変更のないメソッドは省略)
     def set_add_point(self):
         self.move_point_var.set(False)
         self.edit_label_var.set(False)
@@ -259,97 +257,96 @@ class PlotTool:
     def add_label(self):
         if self.add_label_value.get() != 0:
             add_value = self.kmh_to_ms(float(self.add_label_value.get()))
-            for i in range(len(self.labels)):
-                self.labels[i] += add_value
+            # numpy配列に変換して一括で加算
+            self.labels = (np.array(self.labels) + add_value).tolist()
             self.plot_data()
             self.save_undo_trajectory()
     
     def sub_label(self):
         if self.add_label_value.get() != 0:
-            for i in range(len(self.labels)):
-                if self.labels[i] > self.kmh_to_ms(float(self.add_label_value.get())):
-                    self.labels[i] -= self.kmh_to_ms(float(self.add_label_value.get()))
+            sub_value = self.kmh_to_ms(float(self.add_label_value.get()))
+            # numpy配列で効率的に計算
+            labels_np = np.array(self.labels)
+            labels_np[labels_np > sub_value] -= sub_value
+            self.labels = labels_np.tolist()
             self.plot_data()
             self.save_undo_trajectory()
     
     def multiply_label(self):
         if self.multiply_label_value.get() > 0:
-            for i in range(len(self.labels)):
-                self.labels[i] *= float(self.multiply_label_value.get())
+            multiply_value = float(self.multiply_label_value.get())
+            self.labels = (np.array(self.labels) * multiply_value).tolist()
             self.plot_data()
             self.save_undo_trajectory()
-
+    
     def on_option_change(self, *args):
         self.plot_data()
 
     def toggle_dark_mode(self):
-        """ダークモードのオンオフを切り替える関数"""
         if self.dark_mode_var.get():
-            self.fig.patch.set_facecolor('black')  # 図の背景を黒に
-            self.ax.set_facecolor('black')         # 軸の背景を黒に
-            self.ax.tick_params(colors='white')    # 軸の目盛りを白に
-            for label in self.ax.get_xticklabels() + self.ax.get_yticklabels():
-                label.set_color('white')           # 軸ラベルの色を白に
+            face_color = 'black'
+            tick_color = 'white'
         else:
-            self.fig.patch.set_facecolor('white')  # 図の背景を白に戻す
-            self.ax.set_facecolor('white')         # 軸の背景を白に戻す
-            self.ax.tick_params(colors='black')    # 軸の目盛りを黒に戻す
-            for label in self.ax.get_xticklabels() + self.ax.get_yticklabels():
-                label.set_color('black')           # 軸ラベルの色を黒に戻す
-
-        self.plot_data()  # グラフを再描画
-
-    def load_csv(self):
-        file_path = filedialog.askopenfilename()
-        if not file_path:
-            return
-        self.x, self.y, self.labels = [], [], []
-        with open(file_path, 'r') as file:
-            reader = csv.reader(file)
-            i = 0
-            for row in reader:
-                if i == 0:
-                    i += 1
-                    self.header = row
-                else:
-                    self.x.append(float(row[0]))
-                    self.y.append(float(row[1]))
-                    self.z.append(float(row[2]))
-                    self.x_q.append(float(row[3]))
-                    self.y_q.append(float(row[4]))
-                    self.z_q.append(float(row[5]))
-                    self.w_q.append(float(row[6]))
-                    self.labels.append(float(row[7]))
-            # 末尾の値と先頭の値が同じ場合は末尾の値を削除
-            if self.x[-1] == self.x[0] and self.y[-1] == self.y[0]:
-                self.x.pop(-1)
-                self.y.pop(-1)
-                self.z.pop(-1)
-                self.x_q.pop(-1)
-                self.y_q.pop(-1)
-                self.z_q.pop(-1)
-                self.w_q.pop(-1)
-                self.labels.pop(-1)
+            face_color = 'white'
+            tick_color = 'black'
         
-        # 軸の範囲をデータに合わせて調整
-        self.ax.set_xlim(min(self.x) - 5, max(self.x) + 5)
-        self.ax.set_ylim(min(self.y) - 5, max(self.y) + 5)
+        self.fig.patch.set_facecolor(face_color)
+        self.ax.set_facecolor(face_color)
+        self.ax.tick_params(colors=tick_color)
+        for label in self.ax.get_xticklabels() + self.ax.get_yticklabels():
+            label.set_color(tick_color)
 
-        self.save_undo_trajectory()
-        
         self.plot_data()
 
-    def reset_view(self):
+    def load_csv(self, path=None):
+        if path is None:
+            file_path = filedialog.askopenfilename()
+        else:
+            file_path = path
+        if not file_path: return
+
+        # データをnumpy配列として読み込むと高速
+        try:
+            with open(file_path, 'r') as file:
+                self.header = next(csv.reader(file))
+            data = np.loadtxt(file_path, delimiter=',', skiprows=1)
+            
+            # 末尾の値と先頭の値が同じ場合は末尾の値を削除
+            if np.array_equal(data[0,:2], data[-1,:2]):
+                data = data[:-1]
+
+            self.x = data[:, 0].tolist()
+            self.y = data[:, 1].tolist()
+            self.z = data[:, 2].tolist()
+            self.x_q = data[:, 3].tolist()
+            self.y_q = data[:, 4].tolist()
+            self.z_q = data[:, 5].tolist()
+            self.w_q = data[:, 6].tolist()
+            self.labels = data[:, 7].tolist()
+        except (IOError, ValueError) as e:
+            print(f"Error loading CSV: {e}")
+            return
+        
         self.ax.set_xlim(min(self.x) - 5, max(self.x) + 5)
         self.ax.set_ylim(min(self.y) - 5, max(self.y) + 5)
+        self.save_undo_trajectory()
         self.plot_data()
     
+    def reset_view(self):
+        if not self.x: return
+        self.ax.set_xlim(min(self.x) - 5, max(self.x) + 5)
+        self.ax.set_ylim(min(self.y) - 5, max(self.y) + 5)
+        self.plot_data()
+
     def run(self):
-        # example.shを実行するPythonスクリプト
-        path = self.script_dir + '/.post/post.csv'
+        print("Running post-processing script...")
+        path = self.script_dir + '/post/post.csv'
         self.save_csv(path)
         try:
             result = subprocess.run(['bash', self.script_dir + '/shell.sh', path], check=True, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                print("Subprocess completed successfully.")
+                print(result.stdout)
         except subprocess.TimeoutExpired:
             print("Error: The subprocess timed out.")
         except subprocess.CalledProcessError as e:
@@ -360,21 +357,26 @@ class PlotTool:
             file_path = filedialog.askopenfilename()
         else:
             file_path = path
-        if not file_path:
-            return
-        self.inner_map_x, self.inner_map_y, self.outer_map_x, self.outer_map_y = [], [], [], []
-        with open(file_path, 'r') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                if row[0]:
-                    self.inner_map_x.append(float(row[0]))
-                    self.inner_map_y.append(float(row[1]))
-                if row[2]:
-                    self.outer_map_x.append(float(row[2]))
-                    self.outer_map_y.append(float(row[3]))
+        if not file_path: return
         
-        self.ax.plot(self.inner_map_x, self.inner_map_y, 'b-')
-        self.ax.plot(self.outer_map_x, self.outer_map_y, 'b-')
+        self.inner_map_x, self.inner_map_y, self.outer_map_x, self.outer_map_y = [], [], [], []
+        # ここもnumpyで読み込むと高速
+        data = np.genfromtxt(file_path, delimiter=',', invalid_raise=False)
+        self.inner_map_x = data[:, 0][~np.isnan(data[:, 0])].tolist()
+        self.inner_map_y = data[:, 1][~np.isnan(data[:, 1])].tolist()
+        self.outer_map_x = data[:, 2][~np.isnan(data[:, 2])].tolist()
+        self.outer_map_y = data[:, 3][~np.isnan(data[:, 3])].tolist()
+
+        # 古いマッププロットを削除
+        for plot in self.map_plots:
+            plot.remove()
+        self.map_plots.clear()
+        
+        # 新しいプロットを追加
+        plot1, = self.ax.plot(self.inner_map_x, self.inner_map_y, 'b-')
+        plot2, = self.ax.plot(self.outer_map_x, self.outer_map_y, 'b-')
+        self.map_plots.extend([plot1, plot2])
+        
         self.plot_data()
 
     def save_csv(self, path=None):
@@ -383,74 +385,101 @@ class PlotTool:
             file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         else:
             file_path = path
-        if not file_path:
-            return
+        if not file_path: return
+        
         self.last_path = file_path
+        data_to_save = np.array([self.x, self.y, self.z, self.x_q, self.y_q, self.z_q, self.w_q, self.labels]).T
+        
         with open(file_path, 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(self.header)
-            for i in range(len(self.x)):
-                writer.writerow([self.x[i], self.y[i], self.z[i], self.x_q[i], self.y_q[i], self.z_q[i], self.w_q[i], self.labels[i]])
-            # 最初に追加した点を末尾に追加
+            writer.writerows(data_to_save)
             if self.x[0] != self.x[-1] or self.y[0] != self.y[-1]:
-                writer.writerow([self.x[0], self.y[0], self.z[0], self.x_q[0], self.y_q[0], self.z_q[0], self.w_q[0], self.labels[0]])
-            
+                writer.writerow(data_to_save[0])
 
     def plot_data(self):
-        # 現在のxlimとylimを保存
+        if not self.x:
+            self.canvas.draw()
+            return
+
         xlim = self.ax.get_xlim()
         ylim = self.ax.get_ylim()
 
-        self.ax.clear()  # 現在のプロットをクリア
+        # 古い軌跡オブジェクトを削除
+        if self.points_collection: self.points_collection.remove()
+        if self.line_collection: self.line_collection.remove()
+        for txt in self.label_texts: txt.remove()
+        self.label_texts.clear()
+        
+        # 背景色とラベルの色を設定
+        label_color = 'white' if self.dark_mode_var.get() else 'blue'
 
-        # ダークモードかどうかで背景色を変更
-        if self.dark_mode_var.get():
-            self.ax.set_facecolor('black')  # 軸の背景を黒に設定
-            label_color = 'white'           # ラベルの色を白に
-        else:
-            self.ax.set_facecolor('white')  # 軸の背景を白に設定
-            label_color = 'blue'            # ラベルの色を青に戻す
+        # 点と線の色を計算
+        point_colors = [self.get_color(label, i) for i, label in enumerate(self.labels)]
+        line_colors = [self.get_color(self.labels[i]) for i in range(1, len(self.labels))]
+        line_colors.append(self.get_color(self.labels[0]))
 
-        # 点をプロット
-        for i in range(len(self.x)):
-            color = self.get_color(self.labels[i], i)
-            self.ax.plot(self.x[i], self.y[i], 'o', color=color, picker=5)
+        # 点をscatterで一括描画
+        self.points_collection = self.ax.scatter(self.x, self.y, c=point_colors, picker=5, zorder=3)
 
-        # 線をプロット
-        for i in range(len(self.x) - 1):
-            color = self.get_color(self.labels[i + 1])
-            self.ax.plot(self.x[i:i + 2], self.y[i:i + 2], color=color)
-        if self.labels:
-            color = self.get_color(self.labels[0])
-            self.ax.plot([self.x[-1], self.x[0]], [self.y[-1], self.y[0]], color=color)
+        # 線をLineCollectionで一括描画
+        points = np.array([self.x, self.y]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        # ループを閉じる線分を追加
+        loop_segment = np.array([[self.x[-1], self.y[-1]], [self.x[0], self.y[0]]]).reshape(1, 2, 2)
+        all_segments = np.concatenate([segments, loop_segment])
+        
+        self.line_collection = LineCollection(all_segments, colors=line_colors, zorder=2)
+        self.ax.add_collection(self.line_collection)
 
-        # チェックボタンの状態に応じてラベルを表示
+        # ラベル表示
         if self.show_labels_var.get():
             for i in range(len(self.x)):
-                txt = self.ax.text(self.x[i], self.y[i], str(int(self.ms_to_kmh(self.labels[i]))), fontsize=12, ha='right', color=label_color)
-                self.texts.append(txt)
+                txt = self.ax.text(self.x[i], self.y[i], f"{self.ms_to_kmh(self.labels[i]):.0f}",
+                                   fontsize=12, ha='right', color=label_color, clip_on=True)
+                self.label_texts.append(txt)
 
-        # マップをプロット
-        if self.inner_map_x:
-            self.ax.plot(self.inner_map_x, self.inner_map_y, 'b-')
-            self.ax.plot(self.outer_map_x, self.outer_map_y, 'b-')
-
-        # 保存していたxlimとylimを再設定
         self.ax.set_xlim(xlim)
         self.ax.set_ylim(ylim)
+        self.canvas.draw_idle()
 
-        self.canvas.draw()  # 描画を更新
+    def update_plot_for_motion(self):
+        """マウス移動中の軽量なプロット更新"""
+        if self.points_collection is None or self.line_collection is None:
+            return
+
+        # scatter（点）の座標を更新
+        offsets = np.c_[self.x, self.y]
+        self.points_collection.set_offsets(offsets)
+
+        # LineCollection（線）のセグメントを更新
+        points = offsets.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        loop_segment = np.array([[points[-1, 0, :], points[0, 0, :]]])
+        all_segments = np.concatenate([segments, loop_segment])
+        self.line_collection.set_segments(all_segments)
+
+        # ラベルの位置を更新
+        if self.show_labels_var.get():
+            for i, txt in enumerate(self.label_texts):
+                txt.set_position((self.x[i], self.y[i]))
+        
+        self.canvas.draw_idle()
 
     def get_color(self, label, index=None):
-        if self.selected_range_start and index or self.selected_range_end and index:
+        if self.move_selected_var.get() and index is not None:
             if index == self.selected_range_start or index == self.selected_range_end:
                 return 'orange'
-        if label > self.kmh_to_ms(self.high_offset_value.get()):
-            return 'green'
-        elif label > self.kmh_to_ms(self.low_offset_value.get()):
-            return 'yellow'
-        else:
-            return 'red'
+        if self.straight_line_var.get() and index is not None:
+             if index == self.selected_range_start or index == self.selected_range_end:
+                return 'cyan'
+        
+        high_val = self.kmh_to_ms(self.high_offset_value.get())
+        low_val = self.kmh_to_ms(self.low_offset_value.get())
+
+        if label > high_val: return 'green'
+        elif label > low_val: return 'yellow'
+        else: return 'red'
 
     def on_click(self, event):
         if event.inaxes != self.ax: return
@@ -466,339 +495,344 @@ class PlotTool:
             elif self.edit_label_var.get():
                 point_idx = self.find_nearest_point(event.xdata, event.ydata)
                 if point_idx is not None:
-                    self.active_label = point_idx  # アクティブなラベルを設定
-                    self.edit_label(point_idx)     # ラベル編集
-                    self.plot_data()               # ラベルを表示
+                    self.active_label = point_idx
+                    self.edit_label(point_idx)
             elif self.calculate_speed_var.get():
-                # 二点選択してそれぞれのindexを取得
-                if self.edit_labels_start is None:
+                # (元のロジックを維持)
+                 if self.edit_labels_start is None:
                     self.edit_labels_start = self.find_nearest_point(event.xdata, event.ydata)
-                else:
+                 else:
                     end = self.find_nearest_point(event.xdata, event.ydata)
                     if end is not None:
-                        # その区間に一律の値を入れる
-                        new_label = tk.simpledialog.askstring("Edit Label", f"Edit label for points {self.edit_labels_start} to {end}", initialvalue=self.ms_to_kmh(self.labels[self.edit_labels_start]))
-                        if new_label is not None:
-                            new_label = self.kmh_to_ms(float(new_label))
-                            trj_length = len(self.x)
-                            index_length = end - self.edit_labels_start
-                            step = 1 if index_length > 0 else -1
-                            if step < 0 and trj_length-self.edit_labels_start+end+1 < trj_length/2:
-                                step = 1
-                                for i in range(self.edit_labels_start, trj_length):
-                                    self.labels[i] = new_label
-                                for i in range(end+1):
-                                    self.labels[i] = new_label
-                            elif step > 0 and index_length > trj_length/2:
-                                step = -1
-                                for i in range(self.edit_labels_start, -1, step):
-                                    self.labels[i] = new_label
-                                for i in range(trj_length-1, end-1, step):
-                                    self.labels[i] = new_label
-                            else:
-                                for i in range(self.edit_labels_start, end+step, step):
-                                    self.labels[i] = new_label
+                        new_label_kmh = simpledialog.askstring("Edit Label", f"Edit label for points {self.edit_labels_start} to {end}", initialvalue=f"{self.ms_to_kmh(self.labels[self.edit_labels_start]):.1f}")
+                        if new_label_kmh is not None:
+                            new_label_ms = self.kmh_to_ms(float(new_label_kmh))
+                            indices = self.get_points_in_range(self.edit_labels_start, end)
+                            for i in indices:
+                                self.labels[i] = new_label_ms
                             self.plot_data()
                             self.edit_labels_start = None
                             self.save_undo_trajectory()
+
             elif self.move_selected_var.get():
                 if not self.selected_range_start:
-                    # 1つ目の点選択
                     self.selected_range_start = self.find_nearest_point(event.xdata, event.ydata)
                     self.plot_data()
                 elif not self.selected_range_end:
-                    # 2つ目の点選択
                     self.selected_range_end = self.find_nearest_point(event.xdata, event.ydata)
                     if self.selected_range_start is not None and self.selected_range_end is not None:
-                        # 選択範囲の点を取得
                         self.selected_range_points = self.get_points_in_range(self.selected_range_start, self.selected_range_end)
-                        self.dragging_range = True  # ドラッグモードをON
+                        self.dragging_range = True
+                        self.drag_start_pos = (event.xdata, event.ydata)
                         self.plot_data()
                 else:
-                    # 範囲が選択済みの場合は新しい範囲にリセット
                     self.selected_range_start = self.find_nearest_point(event.xdata, event.ydata)
                     self.selected_range_end = None
                     self.selected_range_points = []
                     self.dragging_range = False
             elif self.straight_line_var.get():
-                if not self.selected_range_start and self.selected_range_end is None:
-                    # 1つ目の点選択
+                if self.selected_range_start is None:
                     self.selected_range_start = self.find_nearest_point(event.xdata, event.ydata)
                     self.plot_data()
-                elif not self.selected_range_end:
-                    # 2つ目の点選択
+                elif self.selected_range_end is None:
                     self.selected_range_end = self.find_nearest_point(event.xdata, event.ydata)
                     if self.selected_range_start is not None and self.selected_range_end is not None:
-                        # 選択範囲の点を取得
-                        self.selected_range_points = self.get_points_in_range(self.selected_range_start, self.selected_range_end)
-                        # startとendの点を結ぶ直線を求める
+                        indices = self.get_points_in_range(self.selected_range_start, self.selected_range_end)
                         x0, y0 = self.x[self.selected_range_start], self.y[self.selected_range_start]
                         x1, y1 = self.x[self.selected_range_end], self.y[self.selected_range_end]
-                        for i in self.selected_range_points[1:]:
-                            x, y = self.project_point_on_line(x0, y0, x1, y1, self.x[i], self.y[i])
-                            self.x[i] = x
-                            self.y[i] = y
+                        for i in indices:
+                            # Skip start and end points
+                            if i == self.selected_range_start or i == self.selected_range_end: continue
+                            px, py = self.project_point_on_line(x0, y0, x1, y1, self.x[i], self.y[i])
+                            self.x[i] = px
+                            self.y[i] = py
                         self.plot_data()
                         self.save_undo_trajectory()
+                        self.selected_range_start = None
+                        self.selected_range_end = None
                 else:
-                    # 範囲が選択済みの場合は新しい範囲にリセット
                     self.selected_range_start = self.find_nearest_point(event.xdata, event.ydata)
                     self.selected_range_end = None
-                    self.selected_range_points = []
                     self.plot_data()
 
-
         elif event.button == MouseButton.RIGHT:
-            self.selected_line = None
-            # 画面移動のために右クリックを使用
             self.pan_active = True
             self.pan_start = (event.xdata, event.ydata)
 
     def on_release(self, event):
-        if self.dragging_range:
+        # ドラッグ終了時に完全な再描画を実行
+        if self.selected_point is not None or self.dragging_range:
             self.save_undo_trajectory()
-        if self.selected_point is not None:
-            self.save_undo_trajectory()
+            self.plot_data() # 色の更新などを反映
+
         self.selected_point = None
         self.selected_line = None
-        self.pan_active = False  # 画面移動を終了
-        self.dragging_range = False  # 範囲ドラッグを終了
-
+        self.pan_active = False
+        self.dragging_range = False
+        self.drag_start_pos = None
 
     def on_motion(self, event):
-        if self.selected_point is not None and event.inaxes == self.ax:
-            # 点をドラッグして移動
+        if event.inaxes != self.ax: return
+
+        if self.selected_point is not None:
+            # 軽量な更新関数を呼び出す
             self.x[self.selected_point] = event.xdata
             self.y[self.selected_point] = event.ydata
-            self.plot_data()
-        elif self.pan_active and event.inaxes == self.ax:
-            # 画面移動（パン）機能
+            self.update_plot_for_motion()
+
+        elif self.dragging_range and self.selected_range_points:
+            # 範囲選択移動も軽量な更新
+            if self.drag_start_pos is None: return
+            dx = event.xdata - self.drag_start_pos[0]
+            dy = event.ydata - self.drag_start_pos[1]
+            
+            x_np = np.array(self.x)
+            y_np = np.array(self.y)
+            
+            # 選択範囲の点のインデックスをnumpy配列にする
+            indices_np = np.array(self.selected_range_points)
+            
+            x_np[indices_np] += dx
+            y_np[indices_np] += dy
+            
+            self.x = x_np.tolist()
+            self.y = y_np.tolist()
+            
+            self.drag_start_pos = (event.xdata, event.ydata)
+            self.update_plot_for_motion()
+
+        elif self.pan_active:
+            # パン機能
+            if self.pan_start[0] is None or self.pan_start[1] is None: return
             dx = self.pan_start[0] - event.xdata
             dy = self.pan_start[1] - event.ydata
-
-            # 現在の軸範囲を取得して、ドラッグ量に基づいて新しい範囲を設定
             xlim = self.ax.get_xlim()
             ylim = self.ax.get_ylim()
-
             self.ax.set_xlim(xlim[0] + dx, xlim[1] + dx)
             self.ax.set_ylim(ylim[0] + dy, ylim[1] + dy)
-
-            self.canvas.draw()  # 描画を更新
-        elif self.dragging_range and self.selected_range_points and event.inaxes == self.ax:
-            # 選択範囲の点をすべて平行移動
-            dx = event.xdata - self.x[self.selected_range_points[-1]]
-            dy = event.ydata - self.y[self.selected_range_points[-1]]
-
-            for idx in self.selected_range_points:
-                self.x[idx] += dx
-                self.y[idx] += dy
-
-            self.plot_data()  # グラフの再描画
+            self.canvas.draw_idle()
 
     def on_scroll(self, event):
-        # スクロールイベントでズームイン/ズームアウト
+        if event.inaxes != self.ax or event.xdata is None: return
         xlim = self.ax.get_xlim()
         ylim = self.ax.get_ylim()
-
-        # ズームの中心はマウスの位置
         xdata, ydata = event.xdata, event.ydata
 
-        if event.button == 'up':  # ズームイン
-            scale_factor = self.zoom_scale
-        elif event.button == 'down':  # ズームアウト
-            scale_factor = 1 / self.zoom_scale
-        else:
-            return
-
-        # 新しい範囲を計算
+        scale_factor = self.zoom_scale if event.button == 'up' else 1 / self.zoom_scale
+        
         new_xlim = [(x - xdata) * scale_factor + xdata for x in xlim]
         new_ylim = [(y - ydata) * scale_factor + ydata for y in ylim]
 
-        # 新しい範囲をセット
         self.ax.set_xlim(new_xlim)
         self.ax.set_ylim(new_ylim)
-
-        # 再描画
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def find_nearest_point(self, x, y):
+        if not self.x: return None
         distances = np.hypot(np.array(self.x) - x, np.array(self.y) - y)
         min_idx = np.argmin(distances)
-        if distances[min_idx] < 1:
+        # クリック許容範囲を軸の表示範囲に応じて動的に変更
+        ax_range = np.hypot(self.ax.get_xlim()[1] - self.ax.get_xlim()[0], self.ax.get_ylim()[1] - self.ax.get_ylim()[0])
+        if distances[min_idx] < ax_range * 0.01: # 画面範囲の1%
             return min_idx
         return None
 
     def find_nearest_line(self, x, y):
-        min_distance = float('inf')
-        nearest_idx = None
-        nearest_point = None
+        if len(self.x) < 2: return None
+        
+        points = np.array([self.x, self.y]).T
+        # ループを閉じる線を含めてセグメントを作成
+        segments = np.array(list(zip(points, np.roll(points, -1, axis=0))))
+        
+        # クリックされた点
+        click_point = np.array([x, y])
+        
+        # 各線分への垂線の足と距離を計算 (numpyで一括処理)
+        line_starts, line_ends = segments[:, 0], segments[:, 1]
+        line_vec = line_ends - line_starts
+        line_len_sq = np.sum(line_vec**2, axis=1)
+        
+        # line_len_sq がゼロのセグメントを回避
+        line_len_sq[line_len_sq == 0] = 1e-9
 
-        for i in range(len(self.x) - 1):
-            x0, y0 = self.x[i], self.y[i]
-            x1, y1 = self.x[i + 1], self.y[i + 1]
-            px, py = self.project_point_on_line(x0, y0, x1, y1, x, y)
-            distance = np.hypot(px - x, py - y)
-            
-            if distance < min_distance:
-                min_distance = distance
-                nearest_idx = i
-                nearest_point = (px, py)
+        vec_from_start = click_point - line_starts
+        t = np.sum(vec_from_start * line_vec, axis=1) / line_len_sq
+        t = np.clip(t, 0, 1)
+        
+        projected_points = line_starts + t[:, np.newaxis] * line_vec
+        distances = np.hypot(*(projected_points - click_point).T)
 
-        if nearest_point is not None:
-            # 線分上の最近接点に新しい点を追加
-            self.x.insert(nearest_idx + 1, nearest_point[0])
-            self.y.insert(nearest_idx + 1, nearest_point[1])
-            self.labels.insert(nearest_idx + 1, self.kmh_to_ms(self.initial_label_value.get()))
+        min_dist_idx = np.argmin(distances)
+        ax_range = np.hypot(self.ax.get_xlim()[1] - self.ax.get_xlim()[0], self.ax.get_ylim()[1] - self.ax.get_ylim()[0])
+        
+        if distances[min_dist_idx] < ax_range * 0.02: # 許容範囲
+            nearest_point = projected_points[min_dist_idx]
+            insert_idx = (min_dist_idx + 1) % len(self.x)
+
+            self.x.insert(insert_idx, nearest_point[0])
+            self.y.insert(insert_idx, nearest_point[1])
+            self.z.insert(insert_idx, 0.0) 
+            self.labels.insert(insert_idx, self.kmh_to_ms(self.initial_label_value.get()))
+            self.calc_quaternion() # クォータニオンも更新
             self.plot_data()
             self.save_undo_trajectory()
-            return nearest_idx + 1
+            return insert_idx
         return None
-    
+
     def project_point_on_line(self, x0, y0, x1, y1, x, y):
-        """
-        点(x, y)を直線(x0, y0)-(x1, y1)に射影する
-        """
         dx, dy = x1 - x0, y1 - y0
-        if dx == 0 and dy == 0:
-            return x0, y0
+        if dx == 0 and dy == 0: return x0, y0
         t = ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy)
-        t = np.clip(t, 0, 1)
+        t = np.clip(t, 0, 1) # 線分上に制限
         px, py = x0 + t * dx, y0 + t * dy
         return px, py
-    
-
-
-    def is_near_line(self, x0, y0, x1, y1, x, y, tol=0.1):
-        d = np.abs((y1 - y0) * x - (x1 - x0) * y + x1 * y0 - y1 * x0) / np.hypot(x1 - x0, y1 - y0)
-        return d < tol
 
     def delete_point(self, point_idx):
         self.x.pop(point_idx)
         self.y.pop(point_idx)
+        self.z.pop(point_idx)
         self.labels.pop(point_idx)
+        self.calc_quaternion()
         self.plot_data()
         self.save_undo_trajectory()
 
     def edit_label(self, point_idx):
-        # ポイントのラベルをダブルクリックで編集
-        new_label = tk.simpledialog.askstring("Edit Label", f"Edit label for point {point_idx}", initialvalue=self.labels[point_idx])
+        new_label = simpledialog.askstring("Edit Label", f"Edit label for point {point_idx}", initialvalue=f"{self.ms_to_kmh(self.labels[point_idx]):.1f}")
         if new_label is not None:
-            self.labels[point_idx] = self.kmh_to_ms(float(new_label))
-            self.plot_data()
-            self.save_undo_trajectory()
-
+            try:
+                self.labels[point_idx] = self.kmh_to_ms(float(new_label))
+                self.plot_data()
+                self.save_undo_trajectory()
+            except ValueError:
+                print("Invalid input for label.")
+    
     def calc_quaternion(self):
-        # すべての点において、次の点を使ってクォータニオンを計算(yawのみ)
-        self.x_q.clear()
-        self.y_q.clear()
-        self.z_q.clear()
-        self.w_q.clear()
-        for i in range(len(self.x) - 1):
-            x0, y0, z0 = self.x[i], self.y[i], self.z[i]
-            x1, y1, z1 = self.x[i + 1], self.y[i + 1], self.z[i + 1]
-            dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
-            yaw = np.arctan2(dy, dx)
-            q = self.quaternion_from_euler(0, 0, yaw)
-            self.x_q.append(q[1])
-            self.y_q.append(q[2])
-            self.z_q.append(q[3])
-            self.w_q.append(q[0])
-        x0, y0, z0 = self.x[-1], self.y[-1], self.z[-1]
-        x1, y1, z1 = self.x[0], self.y[0], self.z[0]
-        dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
-        yaw = np.arctan2(dy, dx)
-        q = self.quaternion_from_euler(0, 0, yaw)
-        self.x_q.append(q[1])
-        self.y_q.append(q[2])
-        self.z_q.append(q[3])
-        self.w_q.append(q[0])
+        if len(self.x) < 2: return
+        x_np, y_np = np.array(self.x), np.array(self.y)
+        # 次の点の座標を取得 (最後の点は最初の点に接続)
+        next_x = np.roll(x_np, -1)
+        next_y = np.roll(y_np, -1)
+        
+        yaw = np.arctan2(next_y - y_np, next_x - x_np)
+        
+        # オイラー角からクォータニオンへ一括変換
+        roll, pitch = 0.0, 0.0
+        cy = np.cos(yaw * 0.5)
+        sy = np.sin(yaw * 0.5)
+        cp = np.cos(pitch * 0.5)
+        sp = np.sin(pitch * 0.5)
+        cr = np.cos(roll * 0.5)
+        sr = np.sin(roll * 0.5)
+        
+        self.w_q = (cy * cp * cr + sy * sp * sr).tolist()
+        self.x_q = (cy * cp * sr - sy * sp * cr).tolist()
+        self.y_q = (sy * cp * sr + cy * sp * cr).tolist()
+        self.z_q = (sy * cp * cr - cy * sp * sr).tolist()
+
 
     def get_points_in_range(self, start_idx, end_idx):
-        # start_idxとend_idxの範囲内の点インデックスを取得
-        index_length = end_idx - start_idx
-        step = 1 if index_length > 0 else -1
-        trj_length = len(self.x)
-        if step < 0 and trj_length-start_idx+end_idx+1 < trj_length/2:
-            step = 1
-            return list(range(start_idx, trj_length)) + list(range(end_idx+1))
-        elif step > 0 and index_length > trj_length/2:
-            step = -1
-            return list(range(start_idx, -1, step)) + list(range(trj_length-1, end_idx-1, step))
+        n = len(self.x)
+        if start_idx == end_idx:
+            return [start_idx]
+        
+        # 時計回りと反時計回りの距離を計算
+        dist_forward = (end_idx - start_idx + n) % n
+        dist_backward = (start_idx - end_idx + n) % n
+        
+        indices = []
+        if dist_forward <= dist_backward:
+            # 時計回り
+            curr = start_idx
+            while curr != end_idx:
+                indices.append(curr)
+                curr = (curr + 1) % n
+            indices.append(end_idx)
         else:
-            return list(range(start_idx, end_idx+step, step))
+            # 反時計回り
+            curr = start_idx
+            while curr != end_idx:
+                indices.append(curr)
+                curr = (curr - 1 + n) % n
+            indices.append(end_idx)
+            
+        return indices
         
     def save_undo_trajectory(self):
-        # 現在の軌跡をundo_listに保存
-        self.undo_list.append((self.x.copy(), self.y.copy(), self.labels.copy()))
+        # 軌跡データをコピーして保存
+        current_state = {
+            'x': self.x.copy(), 'y': self.y.copy(), 'z': self.z.copy(),
+            'labels': self.labels.copy(), 'x_q': self.x_q.copy(), 'y_q': self.y_q.copy(),
+            'z_q': self.z_q.copy(), 'w_q': self.w_q.copy()
+        }
+        self.undo_list.append(current_state)
+        if len(self.undo_list) > 50: # undo履歴の最大数を制限
+            self.undo_list.pop(0)
         self.redo_list.clear()
     
     def undo(self):
-        if self.undo_list:
-            self.x, self.y, self.labels = self.undo_list.pop()
-            self.redo_list.append((self.x.copy(), self.y.copy(), self.labels.copy()))
+        if len(self.undo_list) > 1:
+            current_state = self.undo_list.pop()
+            self.redo_list.append(current_state)
+            
+            previous_state = self.undo_list[-1]
+            self.restore_state(previous_state)
             self.plot_data()
     
     def redo(self):
         if self.redo_list:
-            self.x, self.y, self.labels = self.redo_list.pop()
-            self.undo_list.append((self.x.copy(), self.y.copy(), self.labels.copy()))
+            next_state = self.redo_list.pop()
+            self.undo_list.append(next_state)
+            self.restore_state(next_state)
             self.plot_data()
-
+    
+    def restore_state(self, state):
+        self.x = state['x'].copy()
+        self.y = state['y'].copy()
+        self.z = state['z'].copy()
+        self.labels = state['labels'].copy()
+        self.x_q = state['x_q'].copy()
+        self.y_q = state['y_q'].copy()
+        self.z_q = state['z_q'].copy()
+        self.w_q = state['w_q'].copy()
 
     def ms_to_kmh(self, ms):
         return ms * 3.6
     
     def kmh_to_ms(self, kmh):
         return kmh / 3.6
-
-
+    
+    # (euler_from_quaternion, quaternion_from_euler は変更なしのため省略)
     def euler_from_quaternion(self, quaternion):
-        """
-        Converts quaternion (w in last place) to euler roll, pitch, yaw
-        quaternion = [x, y, z, w]
-        Bellow should be replaced when porting for ROS 2 Python tf_conversions is done.
-        """
-        x = quaternion.x
-        y = quaternion.y
-        z = quaternion.z
-        w = quaternion.w
-
+        x, y, z, w = quaternion.x, quaternion.y, quaternion.z, quaternion.w
         sinr_cosp = 2 * (w * x + y * z)
         cosr_cosp = 1 - 2 * (x * x + y * y)
         roll = np.arctan2(sinr_cosp, cosr_cosp)
-
         sinp = 2 * (w * y - z * x)
         pitch = np.arcsin(sinp)
-
         siny_cosp = 2 * (w * z + x * y)
         cosy_cosp = 1 - 2 * (y * y + z * z)
         yaw = np.arctan2(siny_cosp, cosy_cosp)
-
         return roll, pitch, yaw
 
     def quaternion_from_euler(self, roll, pitch, yaw):
-        """
-        Converts euler roll, pitch, yaw to quaternion (w in last place)
-        quat = [w, x, y, z]
-        Bellow should be replaced when porting for ROS 2 Python tf_conversions is done.
-        """
         cy = math.cos(yaw * 0.5)
         sy = math.sin(yaw * 0.5)
         cp = math.cos(pitch * 0.5)
         sp = math.sin(pitch * 0.5)
         cr = math.cos(roll * 0.5)
         sr = math.sin(roll * 0.5)
-
         q = [0] * 4
         q[0] = cy * cp * cr + sy * sp * sr
         q[1] = cy * cp * sr - sy * sp * cr
         q[2] = sy * cp * sr + cy * sp * cr
         q[3] = sy * cp * cr - cy * sp * sr
-
         return q
-
 
 if __name__ == "__main__":
     root = tk.Tk()
     plot_tool = PlotTool(root)
+    # 起動時にデフォルトのCSVを読み込む
+    default_csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'post', 'post.csv')
+    if os.path.exists(default_csv_path):
+        plot_tool.load_csv(default_csv_path)
     root.mainloop()

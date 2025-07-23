@@ -3,7 +3,7 @@ Provides a trajectory editor and a tool for generating trajectory from raceline
 
 ## how to run
 ```bash
-export PATH="$PATH:$HOME/aichallenge2024-trajectory-editor/cmd_line/"
+export PATH="$PATH:/aichallenge/aichallenge-trajectory-editor/cmd_line/"
 ```
 
 run editor
