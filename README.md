@@ -27,10 +27,10 @@ This project is a plugin for editing vehicle tracks on Rviz.
 
 ### 1\. リポジトリのクローン
 
-まず、任意のワークスペース（例: `~/aichallenge/workspace/src`）に本リポジトリをクローンします。
+まず、任意のワークスペース（例: `~/aichallenge/workspace/src/aichallenge_submit/`）に本リポジトリをクローンします。
 
 ```bash
-cd ~/aichallenge-2025/aichallenge/workspace/src
+cd ~/aichallenge-2025/aichallenge/workspace/src/aichallenge_submit
 git clone https://github.com/iASL-Gifu/aichallenge-trajectory-editor.git
 ```
 
