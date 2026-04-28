@@ -1,6 +1,6 @@
 /**:
     ros__parameters:
-      csv_file_path: "/path/to/trajectory.csv"
+      csv_file_path: "/aichallenge/workspace/src/aichallenge_submit/aichallenge-trajectory-editor/csv/raceline_base.csv"
       publish_on_initialize: true
       wait_seconds: 2.0
       grad_min_speed: 0.0

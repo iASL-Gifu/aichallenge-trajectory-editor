@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(rviz_editor_plugins)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -19,6 +22,7 @@ find_package(rviz_ogre_vendor REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 find_package(editor_tool_srvs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(rcpputils REQUIRED)
 
 include_directories(src ${OGRE_INCLUDE_DIRS} ${OGRE_INCLUDE_DIRS}/Paging)
 
@@ -46,6 +50,7 @@ ament_target_dependencies(${PROJECT_NAME}
   rviz_rendering
   rviz_ogre_vendor
   std_srvs
+  rcpputils
 )
 
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)

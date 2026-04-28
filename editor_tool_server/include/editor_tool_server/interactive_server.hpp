@@ -1,14 +1,14 @@
 // File: interactive_server.hpp
 #pragma once
 
-#include <chrono>
 #include <memory>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "interactive_markers/interactive_marker_server.hpp"
 #include "interactive_markers/menu_handler.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "visualization_msgs/msg/interactive_marker.hpp"
 #include "visualization_msgs/msg/interactive_marker_control.hpp"
@@ -17,162 +17,162 @@
 #include "visualization_msgs/msg/marker_array.hpp"
 
 #include "editor_tool_srvs/srv/load_csv.hpp"
-#include "editor_tool_srvs/srv/select_range.hpp"
 #include "editor_tool_srvs/srv/save_csv.hpp"
+#include "editor_tool_srvs/srv/select_range.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
-#include "autoware_auto_planning_msgs/msg/trajectory.hpp"
-#include "autoware_auto_planning_msgs/msg/trajectory_point.hpp"
+namespace editor_tool_server {
+class EditorToolServer : public rclcpp::Node {
+public:
+  /// Constructor: initializes the node, service servers, and publisher
+  explicit EditorToolServer(
+      const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
+  ~EditorToolServer() = default;
 
-namespace editor_tool_server
-{
-  class EditorToolServer : public rclcpp::Node
-  {
-  public:
-    /// Constructor: initializes the node, service servers, and publisher
-    explicit EditorToolServer(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
-    ~EditorToolServer() = default;
+  /// Applies pending changes on the InteractiveMarkerServer
+  inline void applyChanges() { server_->applyChanges(); }
 
-    /// Applies pending changes on the InteractiveMarkerServer
-    inline void applyChanges()
-    {
-      server_->applyChanges();
-    }
+private:
+  // --- サービスコールバック ---
 
-  private:
-    // --- サービスコールバック ---
+  /// CSVファイルから軌跡データを読み込み、インタラクティブマーカーと内部データを初期化
+  void LoadCsv(
+      const std::shared_ptr<editor_tool_srvs::srv::LoadCsv::Request> request,
+      std::shared_ptr<editor_tool_srvs::srv::LoadCsv::Response> response);
 
-    /// CSVファイルから軌跡データを読み込み、インタラクティブマーカーと内部データを初期化
-    void LoadCsv(
-      const std::shared_ptr<editor_tool_srvs::srv::LoadCsv::Request>  request,
-      std::shared_ptr<editor_tool_srvs::srv::LoadCsv::Response>       response);
-    
-    void LoadCsvFile(const std::string & file_name);
+  bool LoadCsvFile(const std::string &file_name);
 
-    void SaveCsvSrv(
+  void SaveCsvSrv(
       const std::shared_ptr<editor_tool_srvs::srv::SaveCsv::Request> request,
-      std::shared_ptr<editor_tool_srvs::srv::SaveCsv::Response>      response);
+      std::shared_ptr<editor_tool_srvs::srv::SaveCsv::Response> response);
 
-    /// 選択モードを開始し、２点を選択した後、その間にあるマーカーを青くして速度を反映する
-    void StartSelection(
-      const std::shared_ptr<editor_tool_srvs::srv::SelectRange::Request>  request,
-      std::shared_ptr<editor_tool_srvs::srv::SelectRange::Response>        response);
+  /// 選択モードを開始し、２点を選択した後、その間にあるマーカーを青くして速度を反映する
+  void StartSelection(
+      const std::shared_ptr<editor_tool_srvs::srv::SelectRange::Request>
+          request,
+      std::shared_ptr<editor_tool_srvs::srv::SelectRange::Response> response);
 
-    void StartParallelMove(
-      const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-      std::shared_ptr<std_srvs::srv::Trigger::Response> response);
-    
-    void ConfirmParallelMove(
-      const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-      std::shared_ptr<std_srvs::srv::Trigger::Response> response);
-    
-    void undo(
+  void StartParallelMove(
       const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
       std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
-    void redo(
+  void ConfirmParallelMove(
       const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
       std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
-    void publishTrajectorySrv(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-      std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+  void undo(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
-    void AutoColorizeTraj(visualization_msgs::msg::Marker & marker, double velocity);
-    void publishTrajectory();
-    
-    void redrawMarkers();
-    void createMoveHelperMarker();
-    void saveStateForUndo();
+  void redo(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
-    // --- インタラクティブマーカーフィードバックハンドラ ---
+  void AutoColorizeTraj(visualization_msgs::msg::Marker &marker,
+                        double velocity);
 
-    /// インタラクティブマーカーへの一般的なフィードバックを処理
-    void processFeedback(
-      const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr & feedback);
+  void redrawMarkers();
+  void createMoveHelperMarker();
+  void saveStateForUndo();
+  void highlightMarker(int index);
+  void highlightRange(const std::vector<int> &indices);
+  bool applyVelocityToRange(int idx1, int idx2, double velocity);
+  double markerSpeedKmh(const visualization_msgs::msg::Marker &marker) const;
 
-    /// マーカーをグリッドにスナップし、“感度”を考慮して緩やかに動かし、かつ「次のマーカーの方向を向く」ようオリエンテーションを再計算
-    void alignMarker(
-      const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr & feedback);
+  // --- インタラクティブマーカーフィードバックハンドラ ---
 
-    // --- マーカー生成・更新・公開 ---
+  /// インタラクティブマーカーへの一般的なフィードバックを処理
+  void processFeedback(
+      const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr
+          &feedback);
 
-    /// 与えられた基礎マーカーからインタラクティブマーカーを作成（クリック可能領域を拡大）
-    void makeMoveTrajectoryMarker(visualization_msgs::msg::Marker & marker);
+  /// マーカーをグリッドにスナップし、“感度”を考慮して緩やかに動かし、かつ「次のマーカーの方向を向く」ようオリエンテーションを再計算
+  void alignMarker(
+      const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr
+          &feedback);
 
-    /// MarkerArray の中の連続した点列をラインと速度ラベルに変換して追加
-    bool markerPointsToVelocityLine(visualization_msgs::msg::MarkerArray & marker_array);
+  // --- マーカー生成・更新・公開 ---
 
-    /// trajectory_markers_（基礎マーカー群）を元に改めて MarkerArray を生成して publish
-    void publishMarkers();
+  /// 与えられた基礎マーカーからインタラクティブマーカーを作成（クリック可能領域を拡大）
+  void makeMoveTrajectoryMarker(const visualization_msgs::msg::Marker &marker);
 
-    void refreshTrajectoryColor();
+  /// MarkerArray の中の連続した点列をラインと速度ラベルに変換して追加
+  bool markerPointsToVelocityLine(
+      visualization_msgs::msg::MarkerArray &marker_array);
 
-    // --- CSV ↔ MarkerArray 変換ヘルパー ---
+  /// trajectory_markers_（基礎マーカー群）を元に改めて MarkerArray を生成して
+  /// publish
+  void publishMarkers();
 
-    /// 1行の CSV テキストを Marker に変換
-    bool parseLineToMarker(
-      const std::string & line,
-      int id,
-      visualization_msgs::msg::Marker & marker);
+  void refreshTrajectoryColor();
 
-    /// MarkerArray のデータを CSV ファイルに出力
-    bool saveCsv(
-      const std::string & file_name);
+  // --- CSV ↔ MarkerArray 変換ヘルパー ---
 
-    std::vector<int> getRangeIndices(int idx1, int idx2);
+  /// 1行の CSV テキストを Marker に変換
+  bool parseLineToMarker(const std::string &line, int id,
+                         visualization_msgs::msg::Marker &marker);
 
-    // --- Member variables ---
+  /// MarkerArray のデータを CSV ファイルに出力
+  bool saveCsv(const std::string &file_name);
 
-    /// インタラクティブマーカーを管理するサーバ
-    std::unique_ptr<interactive_markers::InteractiveMarkerServer> server_;
+  std::vector<int> getRangeIndices(int idx1, int idx2);
 
-    /// Service
-    rclcpp::Service<editor_tool_srvs::srv::LoadCsv>::SharedPtr load_csv_service_;
-    rclcpp::Service<editor_tool_srvs::srv::SelectRange>::SharedPtr select_range_service_;
-    rclcpp::Service<editor_tool_srvs::srv::SaveCsv>::SharedPtr save_csv_service_;
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_parallel_move_service_;
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr confirm_parallel_move_service_;
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr undo_service_;
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr redo_service_;
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr publish_trajectory_service_;
+  // --- Member variables ---
 
-    /// Node param
-    std::string csv_file_path_;
-    bool publish_on_initialize_;
-    float wait_seconds_;
-    double min_speed_;
-    double max_speed_;
-    double mid_speed_;
-    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+  /// インタラクティブマーカーを管理するサーバ
+  std::unique_ptr<interactive_markers::InteractiveMarkerServer> server_;
 
-    rcl_interfaces::msg::SetParametersResult onParameterChange(const std::vector<rclcpp::Parameter> & parameters);
+  /// Service
+  rclcpp::Service<editor_tool_srvs::srv::LoadCsv>::SharedPtr load_csv_service_;
+  rclcpp::Service<editor_tool_srvs::srv::SelectRange>::SharedPtr
+      select_range_service_;
+  rclcpp::Service<editor_tool_srvs::srv::SaveCsv>::SharedPtr save_csv_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr
+      start_parallel_move_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr
+      confirm_parallel_move_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr undo_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr redo_service_;
 
+  /// Node param
+  std::string csv_file_path_;
+  bool publish_on_initialize_;
+  double wait_seconds_;
+  double min_speed_;
+  double max_speed_;
+  double mid_speed_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
+      param_callback_handle_;
 
-    /// MarkerArray をまとめて publish するパブリッシャ
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
-    rclcpp::Publisher<autoware_auto_planning_msgs::msg::Trajectory>::SharedPtr trajectory_pub_;
+  rcl_interfaces::msg::SetParametersResult
+  onParameterChange(const std::vector<rclcpp::Parameter> &parameters);
 
-    /// 基礎となる軌跡マーカーを保持。CSV から読み込んだ順番どおりに格納
-    std::vector<visualization_msgs::msg::Marker> trajectory_markers_;
+  /// MarkerArray をまとめて publish するパブリッシャ
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      marker_pub_;
+  rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerFeedback>::
+      SharedPtr raw_feedback_sub_;
 
-    /// 「インタラクティブマーカー名(ns_id)」から trajectory_markers_ のインデックスを引けるマップ
-    std::unordered_map<std::string, int> name_to_index_;
+  /// 基礎となる軌跡マーカーを保持。CSV から読み込んだ順番どおりに格納
+  std::vector<visualization_msgs::msg::Marker> trajectory_markers_;
 
-    /// 選択モード（速度変更用）
-    bool selection_mode_{false};
-    int sel_idx1_{-1};
-    int sel_idx2_{-1};
-    double selection_velocity_{0.0};
+  /// 「インタラクティブマーカー名(ns_id)」から trajectory_markers_
+  /// のインデックスを引けるマップ
+  std::unordered_map<std::string, int> name_to_index_;
 
-    // // 並列モード
-    bool parallel_mode_{false};
-    int p_sel_idx1_{-1};
-    int p_sel_idx2_{-1};
-    std::string move_marker_name_{"parallel_picker"};
-    geometry_msgs::msg::Point move_marker_prev_pos_;
+  /// 選択モード（速度変更用）
+  bool selection_mode_{false};
+  int sel_idx1_{-1};
+  int sel_idx2_{-1};
+  double selection_velocity_{0.0};
 
-    // Undo/Redo バッファ（必要な場合）
-    std::vector<std::vector<visualization_msgs::msg::Marker>> undo_stack_;
-    std::vector<std::vector<visualization_msgs::msg::Marker>> redo_stack_;
-  };
+  // // 並列モード
+  bool parallel_mode_{false};
+  int p_sel_idx1_{-1};
+  int p_sel_idx2_{-1};
+  std::string move_marker_name_{"parallel_picker"};
+  geometry_msgs::msg::Point move_marker_prev_pos_;
+
+  // Undo/Redo バッファ（必要な場合）
+  std::vector<std::vector<visualization_msgs::msg::Marker>> undo_stack_;
+  std::vector<std::vector<visualization_msgs::msg::Marker>> redo_stack_;
+};
 } // namespace editor_tool_server

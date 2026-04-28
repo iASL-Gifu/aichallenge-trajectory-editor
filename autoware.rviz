@@ -561,7 +561,7 @@ Visualization Manager:
           Enabled: true
           Name: ScenarioPlanning
         - Class: rviz_default_plugins/InteractiveMarkers
-          Enable Transparency: false
+          Enable Transparency: true
           Enabled: true
           Interactive Markers Namespace: /editor_tool_server
           Name: Editor_Marker
@@ -582,6 +582,7 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /race_trajectory
+          Selectable: false
           Value: true
       Enabled: true
       Name: Planning
